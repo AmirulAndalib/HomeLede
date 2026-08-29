@@ -79,63 +79,6 @@
    swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
    ```
 
-3. 下载源代码，更新 feeds 并选择配置
-
-   ```bash
-   git clone https://github.com/coolsnowwolf/lede
-   cd lede
-   ./scripts/feeds update -a
-   ./scripts/feeds install -a
-   make menuconfig
-   ```
-
-4. 下载 dl 库，编译固件
-（-j 后面是线程数，第一次编译推荐用单线程）
-
-   ```bash
-   make download -j8
-   make V=s -j1
-   ```
-
-本套代码保证肯定可以编译成功。里面包括了 R24 所有源代码，包括 IPK 的。
-
-你可以自由使用，但源码编译二次发布请注明我的 GitHub 仓库链接。谢谢合作！
-
-二次编译：
-
-```bash
-cd lede
-git pull
-./scripts/feeds update -a
-./scripts/feeds install -a
-make defconfig
-make download -j8
-make V=s -j$(nproc)
-```
-
-如果需要重新配置：
-
-```bash
-rm -rf .config
-make menuconfig
-make V=s -j$(nproc)
-```
-
-编译完成后输出路径：bin/targets
-
-### 使用 WSL/WSL2 进行编译
-2. 安装编译依赖包，命令行输入
-```bash
-sudo apt update -y
-sudo apt full-upgrade -y
-sudo apt install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
-bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib \
-git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev \
-libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev \
-libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python3 \
-python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo \
-uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
-```
 3. `git clone https://github.com/xiaoqingfengATGH/HomeLede.git HomeLede`命令下载好源代码，然后 `cd HomeLede` 进入目录
 
 4. `git checkout -b k5 origin/k5`
@@ -151,22 +94,13 @@ uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
 编译成功后，再次编译可以启动多线程编译。如4核心8线程i7上开启16线程使用`make -j16 V=sc`
 
 ------
-使用Windows子系统（WSL、WSL2）编译：
-
+使用 WSL/WSL2 进行编译
+------
 由于 WSL 的 PATH 中包含带有空格的 Windows 路径，有可能会导致编译失败，请在 `make` 前面加上：
 
 ```bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ```
-二次编译：
-```bash
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin make -j$(($(nproc) + 1)) V=s
-```
-
-------
-macOS 原生系统进行编译：
-------
-1.在 AppStore 中安装 Xcode
 
 由于默认情况下，装载到 WSL 发行版的 NTFS 格式的驱动器将不区分大小写，因此大概率在 WSL/WSL2 的编译检查中会返回以下错误：
 
@@ -185,8 +119,9 @@ PS > git clone https://github.com/coolsnowwolf/lede <your_local_lede_path>
 
 > 对已经 `git clone` 完成的项目目录执行 `fsutil.exe` 命令无法生效，大小写敏感只对新增的文件变更有效。
 
-### macOS 原生系统进行编译
-
+------
+macOS 原生系统进行编译：
+------
 1. 在 AppStore 中安装 Xcode
 
 2. 安装 Homebrew：
@@ -229,7 +164,7 @@ PS > git clone https://github.com/coolsnowwolf/lede <your_local_lede_path>
    echo 'export PATH="/opt/homebrew/opt/make/libexec/gnubin:$PATH"' >> ~/.bashrc
    ```
 
-重新加载一下 shell 启动文件 source ~/.bashrc，然后输入 bash 进入 bash shell，就可以和 Linux 一样正常编译了
+5. 重新加载一下 shell 启动文件 `source ~/.bashrc`，然后输入 `bash` 进入 bash shell，就可以和 Linux 一样正常编译了
 
 ## 固件下载
 如需直接编译完成的固件，请访问Google网盘
