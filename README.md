@@ -51,7 +51,7 @@
 ## 编译说明
 
 注意：
-1. **不**要用 **root** 用户 git 和编译！！！
+1. **不**要用 **root** 用户编译！！！
 2. 国内用户编译前最好准备好梯子
 3. 默认登陆IP 192.168.1.1, 密码 password
 
@@ -66,6 +66,64 @@
 1. 更新apt-get包信息，命令行输入
 `sudo apt-get update`
 
+2. 安装编译依赖包，命令行输入
+   ```bash
+   sudo apt update -y
+   sudo apt full-upgrade -y
+   sudo apt install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+   bzip2 ccache clang cmake cpio curl device-tree-compiler flex gawk gcc-multilib g++-multilib gettext \
+   genisoimage git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev \
+   libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev \
+   libreadline-dev libssl-dev libtool llvm lrzsz libnsl-dev ninja-build p7zip p7zip-full patch pkgconf \
+   python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion \
+   swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+   ```
+
+3. 下载源代码，更新 feeds 并选择配置
+
+   ```bash
+   git clone https://github.com/coolsnowwolf/lede
+   cd lede
+   ./scripts/feeds update -a
+   ./scripts/feeds install -a
+   make menuconfig
+   ```
+
+4. 下载 dl 库，编译固件
+（-j 后面是线程数，第一次编译推荐用单线程）
+
+   ```bash
+   make download -j8
+   make V=s -j1
+   ```
+
+本套代码保证肯定可以编译成功。里面包括了 R24 所有源代码，包括 IPK 的。
+
+你可以自由使用，但源码编译二次发布请注明我的 GitHub 仓库链接。谢谢合作！
+
+二次编译：
+
+```bash
+cd lede
+git pull
+./scripts/feeds update -a
+./scripts/feeds install -a
+make defconfig
+make download -j8
+make V=s -j$(nproc)
+```
+
+如果需要重新配置：
+
+```bash
+rm -rf .config
+make menuconfig
+make V=s -j$(nproc)
+```
+
+编译完成后输出路径：bin/targets
+
+### 使用 WSL/WSL2 进行编译
 2. 安装编译依赖包，命令行输入
 ```bash
 sudo apt update -y
@@ -122,7 +180,7 @@ Build dependency: OpenWrt can only be built on a case-sensitive filesystem
 # 以管理员身份打开终端
 PS > fsutil.exe file setCaseSensitiveInfo <your_local_lede_path> enable
 # 将本项目 git clone 到开启了大小写敏感的目录 <your_local_lede_path> 中
-PS > git clone git@github.com:coolsnowwolf/lede.git <your_local_lede_path>
+PS > git clone https://github.com/coolsnowwolf/lede <your_local_lede_path>
 ```
 
 > 对已经 `git clone` 完成的项目目录执行 `fsutil.exe` 命令无法生效，大小写敏感只对新增的文件变更有效。
@@ -134,10 +192,10 @@ PS > git clone git@github.com:coolsnowwolf/lede.git <your_local_lede_path>
 2. 安装 Homebrew：
 
    ```bash
-   /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
    ```
 
-3. 使用 Homebrew 安装工具链、依赖与基础软件包:
+3. 使用 Homebrew 安装工具链、依赖与基础软件包：
 
    ```bash
    brew unlink awk
@@ -158,8 +216,9 @@ PS > git clone git@github.com:coolsnowwolf/lede.git <your_local_lede_path>
    echo 'export PATH="/usr/local/opt/gnu-sed/libexec/gnubin:$PATH"' >> ~/.bashrc
    echo 'export PATH="/usr/local/opt/make/libexec/gnubin:$PATH"' >> ~/.bashrc
    ```
+
    - apple 芯片的 mac
-   
+
    ```zsh
    echo 'export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"' >> ~/.bashrc
    echo 'export PATH="/opt/homebrew/opt/findutils/libexec/gnubin:$PATH"' >> ~/.bashrc
