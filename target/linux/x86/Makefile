@@ -23,7 +23,6 @@ kmod-sound-hda-core kmod-sound-hda-codec-realtek kmod-sound-hda-codec-via kmod-s
 kmod-usb-net kmod-usb-net-aqc111 kmod-usb-net-asix-ax88179 kmod-usb-net-rtl8150 kmod-mlx4-core kmod-mlx5-core kmod-drm-i915 kmod-drm-amdgpu kmod-usb-audio \
 kmod-usb-net-rtl8152-vendor kmod-r8125-rss kmod-r8126-rss kmod-r8168 kmod-8139cp kmod-8139too kmod-tg3 lm-sensors autocore-x86 automount autosamba ca-bundle \
 ddns-scripts_aliyun ddns-scripts_dnspod ca-certificates \
-homelede-autoconfig \
 dockerd docker open-vm-tools \
 bind-dig unrar unzip dmesg p7zip \
 luci-theme-infinityfreedom luci-theme-argon-dark-mod luci-theme-netgear luci-theme-opentomato luci-theme-opentomcat \
