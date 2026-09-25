@@ -34,6 +34,11 @@ function disableDulicatedPkg()
 
 ./scripts/feeds update -a
 
+# Re-apply our in-tree customizations to the freshly pulled feeds.
+# `feeds update` does a `git pull` per feed and silently resets in-place edits,
+# so the overview-page block registration is replayed here every build.
+./custom/apply-feed-customizations.sh || exit 1
+
 for disablePkg in $disablePkgsList
 do
 	disableDulicatedPkg $disablePkg
