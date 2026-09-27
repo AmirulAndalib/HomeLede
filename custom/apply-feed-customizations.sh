@@ -229,7 +229,11 @@ verify() {
 }
 
 echo "HomeLede feed customizations ($([ "$CHECK_ONLY" = 1 ] && echo check || echo apply)):"
-apply_status_include || { echo "aborting" >&2; exit 1; }
-apply_status_title   || { echo "aborting" >&2; exit 1; }
+
+# In check mode a still-unapplied target reports MISS and returns 1; that is
+# the expected answer, not a failure to abort on. verify() is the authority
+# either way, so let every target report and then let verify set the exit code.
+apply_status_include || [ "$CHECK_ONLY" = 1 ] || { echo "aborting" >&2; exit 1; }
+apply_status_title   || [ "$CHECK_ONLY" = 1 ] || { echo "aborting" >&2; exit 1; }
 verify || exit 1
 exit 0
