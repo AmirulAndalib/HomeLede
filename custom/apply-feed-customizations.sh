@@ -2,13 +2,12 @@
 # HomeLede: re-apply customizations to third-party feeds after `./scripts/feeds update`.
 #
 # Why this exists: `./scripts/feeds update -a` does a `git pull` on every feed and will
-# silently discard any in-place edit made to a feed's source tree.  Our overview-page
-# extensions need exactly one such edit, so it is expressed here as an idempotent,
-# anchored injection that can be replayed any number of times.
+# silently discard any in-place edit made to a feed's source tree.  The 驾驶舱 page
+# needs exactly one such edit, so it is expressed here as an idempotent operation that
+# can be replayed any number of times.
 #
-# Idempotency: every injected line carries the HOMELEDE-CUSTOM marker.  If the expected
-# number of marker lines is already present the injection is skipped -- safe to run
-# repeatedly.
+# Idempotency: each operation asserts its end state (entry present / entry absent) and
+# only writes when that state differs, so it is safe to run repeatedly.
 #
 # Usage:  ./custom/apply-feed-customizations.sh          # apply + verify
 #         ./custom/apply-feed-customizations.sh --check   # verify only, no writes
@@ -24,22 +23,26 @@ CHECK_ONLY=0
 TOPDIR="$(cd "$(dirname "$0")/.." && pwd)" || exit 1
 
 # ---------------------------------------------------------------- target 1 ----
-# luci-mod-status: register the luci-app-homestatus overview blocks.
+# luci-mod-status: drop the two homestatus blocks from the 驾驶舱 include list.
+#
+# The 驾驶舱 page renders its own 关键应用 and 存储 cards in the main area. The
+# stock status include list also carries 25_storage plus our two 95_homestatus*
+# blocks, which land in the collapsed 经典信息视图 drawer and duplicate the main
+# cards (same backend, same data). Remove the duplicates so each datum has one
+# home; the drawer keeps the stock sections that have no main-area equivalent
+# (系统 / 内存 / 网络 / DHCP 租约 / 无线).
 #
 # Upstream openwrt/luci discovers overview blocks by *scanning* the include
-# directory at runtime (fs.list on /www/luci-static/resources/view/status/include),
-# so dropping 95_homestatus*.js in place would be enough.  coolsnowwolf/luci
-# rewrote the loader into a hard-coded `includeModules` array, so each block has
-# to be registered explicitly.
-#
-# Two entries are needed because the loader wraps *every* include in exactly one
-# cbi-section + one title + one hide button (localStorage-keyed).  Emitting two
-# sections from a single include would give two cards but only one hide button.
+# directory at runtime (fs.list on /www/luci-static/resources/view/status/include)
+# so deleting the files would be enough there.  coolsnowwolf/luci rewrote the
+# loader into a hard-coded `includeModules` array, so the entries have to be
+# dropped from that array explicitly -- and `apply_status_include` used to add
+# the two 95_* ones, so this also has to clean up a tree that was patched
+# before this change.
 ST_TARGET='feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/index.js'
-ST_ANCHOR='include.60_wifi'
-ST_MODULES='view.status.include.95_homestatus_disks
-view.status.include.95_homestatus_apps'
-ST_WANT=2
+ST_DROP='95_homestatus_disks
+95_homestatus_apps
+25_storage'
 
 apply_status_include() {
 	_t="$TOPDIR/$ST_TARGET"
@@ -49,66 +52,106 @@ apply_status_include() {
 		return 1
 	fi
 
-	_n=$(grep -c "$MARK" "$_t" || true)
-	if [ "$_n" -eq "$ST_WANT" ]; then
-		echo "  [ ok ] luci-mod-status: ${_n}x marker present, nothing to do"
+	# How many entries still need removing (and, for a tree patched before this
+	# change, how many marker comments come with them).
+	_n=0
+	for _m in $ST_DROP; do
+		grep -q "include\\.$_m" "$_t" && _n=$((_n + 1))
+	done
+
+	if [ "$_n" -eq 0 ]; then
+		echo "  [ ok ] luci-mod-status: drawer duplicates already dropped"
 		return 0
 	fi
 
-	if [ "$_n" -gt 0 ]; then
-		echo "  [FAIL] luci-mod-status: found ${_n}x marker, expected ${ST_WANT}" >&2
-		echo "         refusing to guess -- restore $ST_TARGET and re-run" >&2
-		return 1
-	fi
-
 	if [ "$CHECK_ONLY" = "1" ]; then
-		echo "  [MISS] luci-mod-status: homestatus blocks are NOT registered"
+		echo "  [MISS] luci-mod-status: ${_n}x duplicate block still registered"
 		return 1
 	fi
 
-	# Close the anchor line with a comma and emit every module entry, so the
-	# whole injection is a single atomic pass.
+	# Drop each entry together with its separator so the array stays valid, in
+	# a single pass over the includeModules array: buffer the block, filter it,
+	# then re-emit with the separator restored on every entry but the last.
 	#
-	# Line endings are normalised to LF: a CRLF copy (this tree is edited from
-	# Windows too) would otherwise leave the \r after the comma and break the
-	# emitted JavaScript.
-	awk -v anchor="$ST_ANCHOR" -v mark="$MARK" -v mods="$ST_MODULES" '
-		function emit(   n, arr, i) {
-			n = split(mods, arr, "\n")
-
-			# split() on newline yields a trailing empty field, so drop empties
-			# and count only real module names.
-			while (n > 0 && arr[n] == "")
-				n--
+	# Doing this as one pass rather than "delete line, then un-comma the last"
+	# matters: repairing the trailing comma afterwards cannot tell the array's
+	# own closing bracket from the nested ones in the render body below, and
+	# would strip a legitimate comma there.
+	#
+	# Line endings are normalised to LF -- a CRLF copy (this tree is edited from
+	# Windows too) would otherwise survive into the emitted JavaScript.
+	awk -v drops="$ST_DROP" -v mark="$MARK" '
+		function wanted(name,   n, arr, i) {
+			n = split(drops, arr, "\n")
 
 			for (i = 1; i <= n; i++)
-				print "			{ name: \x27" arr[i] "\x27 }" (i < n ? "," : "") " /* " mark " */"
+				if (arr[i] != "" && index(name, "include." arr[i]) > 0)
+					return 1
+
+			return 0
 		}
-		BEGIN { done = 0 }
 		{
 			line = $0
 			sub(/\r$/, "", line)
 
-			if (!done && index(line, anchor) > 0 && index(line, mark) == 0) {
-				sub(/,[[:space:]]*$/, "", line)
-				print line ","
-				emit()
-				done = 1
+			if (!in_array) {
+				print line
+
+				if (line ~ /includeModules[[:space:]]*=[[:space:]]*\[/) {
+					in_array = 1
+					kept = 0
+					last = 0
+				}
+
+				next
+			}
+
+			# Inside the array. Only entry lines are buffered, so that the
+			# separators can be re-emitted without touching anything else.
+			if (line ~ /^[[:space:]]*\];/) {
+				if (last > 0)
+					sub(/,[[:space:]]*$/, "", kept_lines[last])
+
+				for (i = 1; i <= last; i++)
+					print kept_lines[i]
+
+				in_array = 0
+				print line
+				next
+			}
+
+			if (line ~ /^[[:space:]]*\{ name:/) {
+				if (wanted(line)) {
+					dropped++
+					next
+				}
+
+				kept_lines[++last] = line
 				next
 			}
 
 			print line
 		}
-		END { if (!done) exit 3 }
+		END {
+			if (dropped == 0)
+				exit 3
+
+			if (in_array)
+				exit 4
+		}
 	' "$_t" > "$_t.homelede-new" || {
 		rc=$?
 		rm -f "$_t.homelede-new"
-		echo "  [FAIL] luci-mod-status: anchor '$ST_ANCHOR' not found (loader rewritten upstream?)" >&2
+		case "$rc" in
+			3) echo "  [FAIL] luci-mod-status: no duplicate entry matched -- loader rewritten upstream?" >&2 ;;
+			4) echo "  [FAIL] luci-mod-status: includeModules array not closed -- refusing to write" >&2 ;;
+			*) echo "  [FAIL] luci-mod-status: failed to rewrite the include list" >&2 ;;
+		esac
 		return 1
 	}
 
 	mv "$_t.homelede-new" "$_t"
-	echo "  [done] luci-mod-status: registered homestatus blocks"
+	echo "  [done] luci-mod-status: dropped ${_n}x duplicate drawer block"
 	return 0
 }
 
@@ -165,15 +208,18 @@ apply_status_title() {
 verify() {
 	rc=0
 
+	# target 1: the duplicate drawer blocks must be gone from the include list.
 	_t="$TOPDIR/$ST_TARGET"
-	for _m in $ST_MODULES; do
-		if grep -q "$_m.*$MARK" "$_t" 2>/dev/null; then
-			echo "  [ ok ] loader registers $_m"
-		else
-			echo "  [FAIL] loader does not register $_m" >&2
+	_n=0
+	for _m in $ST_DROP; do
+		if grep -q "include\\.$_m" "$_t" 2>/dev/null; then
+			echo "  [FAIL] loader still registers $_m" >&2
 			rc=1
+		else
+			_n=$((_n + 1))
 		fi
 	done
+	[ "$_n" -gt 0 ] && echo "  [ ok ] loader no longer registers the ${_n}x duplicate block"
 
 	# Syntax-check the patched loader. This has caught a real break: emitting
 	# array entries without separators produces valid-looking text that fails
@@ -193,15 +239,15 @@ verify() {
 		echo "  [warn] node not available - skipped loader syntax check" >&2
 	fi
 
-	# The block files themselves live in our own feed package; the injected
-	# loader entries are harmless (resolveDefault -> null -> filtered out)
-	# while the files are absent.
+	# The block files were removed with the duplicates; the loader entries are
+	# gone too, so nothing should reference them any more.
 	for _f in 95_homestatus_disks 95_homestatus_apps; do
 		_b="$TOPDIR/feeds/xiaoqingfeng/luci-app-homestatus/htdocs/luci-static/resources/view/status/include/$_f.js"
 		if [ -f "$_b" ]; then
-			echo "  [ ok ] block source present: $_f.js"
+			echo "  [FAIL] superseded block still present: $_f.js" >&2
+			rc=1
 		else
-			echo "  [warn] block source missing ($_b)" >&2
+			echo "  [ ok ] superseded block removed: $_f.js"
 		fi
 	done
 
