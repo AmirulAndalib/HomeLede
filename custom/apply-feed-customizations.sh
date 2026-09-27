@@ -112,6 +112,55 @@ apply_status_include() {
 	return 0
 }
 
+# ---------------------------------------------------------------- target 2 ----
+# luci-mod-status: page heading follows the dispatched menu title.
+#
+# The heading is hard-coded to _('Status'), which is wrong for this fork: we
+# rename admin/status/overview ("Overview" -> 驾驶舱) through a menu.d override,
+# so the tab, the browser title and the heading would otherwise disagree.
+# Binding the heading to `dispatched.title` keeps the name in exactly one
+# place -- the menu entry -- so a future rename needs no second edit here.
+#
+# `dispatched` is set by the dispatcher's own render path (runtime.env.dispatched)
+# and is already in scope in this template: the theme's header.ut uses it for
+# the <title> element.
+#
+# The template is Lua- and ucode-side the same file: admin_status/index.ut is
+# installed from ucode/template/ under /usr/share/ucode/luci/template/.
+UT_TARGET='feeds/luci/modules/luci-mod-status/ucode/template/admin_status/index.ut'
+UT_FROM="{{ _('Status') }}"
+UT_TO="{{ _(dispatched.title) }}"
+
+apply_status_title() {
+	_t="$TOPDIR/$UT_TARGET"
+
+	if [ ! -f "$_t" ]; then
+		echo "  [FAIL] $UT_TARGET not found -- run './scripts/feeds update -a' first" >&2
+		return 1
+	fi
+
+	if grep -qF "$UT_TO" "$_t"; then
+		echo "  [ ok ] luci-mod-status: page heading already follows the menu title"
+		return 0
+	fi
+
+	if ! grep -qF "$UT_FROM" "$_t"; then
+		echo "  [FAIL] luci-mod-status: heading anchor '$UT_FROM' not found" >&2
+		return 1
+	fi
+
+	if [ "$CHECK_ONLY" = "1" ]; then
+		echo "  [MISS] luci-mod-status: page heading is still hard-coded"
+		return 1
+	fi
+
+	# In-place, LF-safe: the tree is edited from Windows as well, and a CR
+	# left inside the expression would break the template.
+	sed -i "s|$UT_FROM|$UT_TO|" "$_t"
+	echo "  [done] luci-mod-status: page heading follows the menu title"
+	return 0
+}
+
 # ---------------------------------------------------------------- verify ------
 verify() {
 	rc=0
@@ -156,10 +205,31 @@ verify() {
 		fi
 	done
 
+	# target 2: the page heading must follow the dispatched menu title.
+	_ut="$TOPDIR/$UT_TARGET"
+	if grep -qF "$UT_TO" "$_ut" 2>/dev/null; then
+		echo "  [ ok ] page heading follows the menu title"
+	else
+		echo "  [FAIL] page heading is still hard-coded to _('Status')" >&2
+		rc=1
+	fi
+
+	# The overview rename lives in our own feed package as a menu.d override
+	# that must sort last (the dispatcher merges menu.d files in glob order,
+	# last write wins for a given path).
+	_ov="$TOPDIR/feeds/xiaoqingfeng/luci-app-homestatus/root/usr/share/luci/menu.d/zz-homelede-overview.json"
+	if [ -f "$_ov" ]; then
+		echo "  [ ok ] overview rename override present: $(basename "$_ov")"
+	else
+		echo "  [FAIL] overview rename override missing ($_ov)" >&2
+		rc=1
+	fi
+
 	return $rc
 }
 
 echo "HomeLede feed customizations ($([ "$CHECK_ONLY" = 1 ] && echo check || echo apply)):"
 apply_status_include || { echo "aborting" >&2; exit 1; }
+apply_status_title   || { echo "aborting" >&2; exit 1; }
 verify || exit 1
 exit 0
